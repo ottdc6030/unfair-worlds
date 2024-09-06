@@ -1,0 +1,5 @@
+name: UnfairWorlds
+version: '${project.version}'
+main: com.gmail.danott6340.unfairworlds.UnfairWorlds
+api-version: 1.21
+load: POSTWORLD
