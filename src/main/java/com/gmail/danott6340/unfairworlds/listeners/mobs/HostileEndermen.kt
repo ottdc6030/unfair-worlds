@@ -10,14 +10,19 @@ import org.bukkit.event.EventPriority
 import org.bukkit.event.entity.EntityDeathEvent
 import org.bukkit.inventory.ItemStack
 
-class HostileEndermen private constructor() : AbstractTargeter<Enderman>(Enderman::class.java, Flag.HOSTILE_ENDERMEN) {
+/**
+ * Players that get too close to endermen will be targeted, regardless of whether they were stared at.
+ */
+object HostileEndermen: AbstractTargeter<Enderman>(Enderman::class.java, Flag.HOSTILE_ENDERMEN) {
 
     override fun targetCondition(mob: Enderman, potentialTarget: Player): Boolean {
         mob.setHasBeenStaredAt(true)
-        return true;
+        return true
     }
 
-
+    /**
+     * Endermen guaranteed to drop at least one ender pearl on death.
+     */
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     fun onDeath(e: EntityDeathEvent) {
         if (e.entityType != EntityType.ENDERMAN) return
@@ -25,9 +30,5 @@ class HostileEndermen private constructor() : AbstractTargeter<Enderman>(Enderma
         if (hasFlag(entity.world, Flag.HOSTILE_ENDERMEN) && e.drops.isEmpty()) {
             e.drops.add(ItemStack(Material.ENDER_PEARL, 1))
         }
-    }
-
-    companion object {
-        val instance: HostileEndermen = HostileEndermen()
     }
 }

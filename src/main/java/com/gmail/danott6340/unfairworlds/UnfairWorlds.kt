@@ -1,31 +1,29 @@
 package com.gmail.danott6340.unfairworlds
 
-import com.gmail.danott6340.unfairworlds.listeners.AbstractUnfairListener
-import com.gmail.danott6340.unfairworlds.listeners.mobs.*
-import com.gmail.danott6340.unfairworlds.listeners.other.*
-import com.gmail.danott6340.unfairworlds.listeners.potion.EatingModifier
-import com.gmail.danott6340.unfairworlds.listeners.potion.PoisonFloor
-import com.gmail.danott6340.unfairworlds.listeners.potion.WitherCap
+import com.gmail.danott6340.unfairworlds.listeners.FlagManager
+import com.gmail.danott6340.unfairworlds.listeners.other.AbstractLivingTimer
+import com.gmail.danott6340.unfairworlds.recipe.PotionRecipes
 import org.bukkit.plugin.java.JavaPlugin
 
+/**
+ * Plugin designed to make gameplay in minecraft more difficult without mods or datapacks.
+ */
 class UnfairWorlds : JavaPlugin() {
     companion object {
-        lateinit var instance: UnfairWorlds private set;
+        //This class can't be an object because of how plugins are constructed
+        lateinit var instance: UnfairWorlds private set
     }
 
     val namespaceName = name.lowercase()
 
     override fun onEnable() {
-        instance = this;
-        val instanceList = setOf(NinjaCreeper.instance,AgeSlower.instance, DamageHandler.instance, GhastDeviation.instance,
-            GolemSpace.instance, HostileEndermen.instance, HydraSilverfish.instance, InstantCureZombies.instance,
-            RabbitsLuck.instance, SpiderHandler.instance, UnluckyWitches.instance, BedChanger.instance, DeathModifier.instance,
-            ItemModifier.instance, PlayerScanner.instance, EatingModifier.instance, PoisonFloor.instance, WitherCap.instance)
-        AbstractUnfairListener.registerAll(instanceList);
-        AbstractLivingTimer.seal();
+        instance = this
+        PotionRecipes.initialize()
+        FlagManager.loadFile(instance.logger)
+        AbstractLivingTimer.sealTimers()
     }
 
     override fun onDisable() {
-        AbstractUnfairListener.unregisterAll();
+        FlagManager.shutdown()
     }
 }

@@ -10,8 +10,15 @@ import org.bukkit.event.EventPriority
 import org.bukkit.event.entity.CreatureSpawnEvent
 import org.bukkit.event.entity.EntityDeathEvent
 import org.bukkit.inventory.ItemStack
+import java.util.*
 
-class GhastDeviation private constructor() : AbstractUnfairListener() {
+object GhastDeviation : AbstractUnfairListener() {
+
+    override val allowedFlags: EnumSet<Flag> = EnumSet.of(Flag.GHAST_DEVIATION)
+
+    /**
+     * Increase power of ghast fireballs
+     */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     fun onGhastSpawn(e: CreatureSpawnEvent) {
         val ghast = e.entity
@@ -20,18 +27,17 @@ class GhastDeviation private constructor() : AbstractUnfairListener() {
         ) return
 
         ghast.explosionPower = 3
-        ghast.isSilent = true;
+        ghast.isSilent = true
     }
 
+    /**
+     * Guarantee at least one ghast tear on death
+     */
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     fun onGhastDeath(e: EntityDeathEvent) {
         val entity = e.entity
         if (entity.type != EntityType.GHAST || !hasFlag(entity.world, Flag.GHAST_DEVIATION)) return
 
         e.drops.add(ItemStack(Material.GHAST_TEAR))
-    }
-
-    companion object {
-        val instance: GhastDeviation = GhastDeviation()
     }
 }

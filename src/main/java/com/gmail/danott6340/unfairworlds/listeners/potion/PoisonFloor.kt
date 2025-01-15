@@ -11,25 +11,31 @@ import org.bukkit.entity.LivingEntity
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.entity.EntityPotionEffectEvent
-import org.bukkit.event.player.PlayerTeleportEvent
 import org.bukkit.potion.PotionEffectType
+import java.util.*
 
-class PoisonFloor private constructor() : AbstractUnfairListener() {
-    //Non-multiverse Server: Don't need to handle teleports.
-    /*@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    fun onTeleport(e: PlayerTeleportEvent) {
-        val p = e.player
-        val from = hasFlag(e.from.world, Flag.POISON_FLOOR_HEALTH)
-        val to = hasFlag(e.to.world, Flag.POISON_FLOOR_HEALTH)
+/**
+ * Creates an HP-reducing effect for the Poison potion effect
+ * Every level of strength (up to a maximum of 3) removes 5 HP (2.5 hearts) from the player's maximum HP
+ * The reduction vanishes once the potion effect wears off or is cured.
+ */
+object PoisonFloor: AbstractUnfairListener() {
+    override val allowedFlags: EnumSet<Flag> = EnumSet.of(Flag.POISON_HEALTH_CEILING)
 
-        if (from == to) return
+    private const val POISON_PREFIX = "cheddar_poison_"
+    private lateinit var poisonHealthModifiers: Array<AttributeModifier>
 
-        val instance = p.getAttribute(Attribute.GENERIC_MAX_HEALTH)
-        for (modifier in poisonHealthModifiers) {
-            instance!!.removeModifier(modifier)
+    override fun onLoad() {
+        poisonHealthModifiers = Array(3) {
+            val key = NamespacedKey.fromString(POISON_PREFIX + it, UnfairWorlds.instance)!!
+            val amount = (it + 1) * -5.0
+            AttributeModifier(key, amount, AttributeModifier.Operation.ADD_NUMBER)
         }
-    }*/
+    }
 
+    /**
+     * Creates or removes the health modification from the player, depending on if Poison is being added or removed.
+     */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     fun onPotionAddRemove(e: EntityPotionEffectEvent) {
         val oldEffect = e.oldEffect
@@ -39,7 +45,7 @@ class PoisonFloor private constructor() : AbstractUnfairListener() {
         if (type.key.compareTo(PotionEffectType.POISON.key) != 0) return
         val entity = e.entity
         if (entity !is LivingEntity) return
-        if (!hasFlag(entity.getWorld(), Flag.POISON_FLOOR_HEALTH)) return
+        if (!hasFlag(entity.getWorld(), Flag.POISON_HEALTH_CEILING)) return
 
         val attribute: AttributeInstance = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH)!!
 
@@ -55,16 +61,5 @@ class PoisonFloor private constructor() : AbstractUnfairListener() {
             if (index >= poisonHealthModifiers.size) index = poisonHealthModifiers.size - 1
             attribute.addTransientModifier(poisonHealthModifiers[index])
         }
-    }
-
-
-    companion object {
-        private val poisonHealthModifiers = arrayOf(
-            AttributeModifier(NamespacedKey.fromString("cheddar_poison_0", UnfairWorlds.instance)!!, -5.0, AttributeModifier.Operation.ADD_NUMBER),
-            AttributeModifier(NamespacedKey.fromString("cheddar_poison_1", UnfairWorlds.instance)!!, -10.0, AttributeModifier.Operation.ADD_NUMBER),
-            AttributeModifier(NamespacedKey.fromString("cheddar_poison_2", UnfairWorlds.instance)!!, -15.0, AttributeModifier.Operation.ADD_NUMBER)
-        )
-
-        val instance: PoisonFloor = PoisonFloor()
     }
 }

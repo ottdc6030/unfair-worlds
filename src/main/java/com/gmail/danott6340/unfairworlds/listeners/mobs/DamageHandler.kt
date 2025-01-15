@@ -1,6 +1,5 @@
 package com.gmail.danott6340.unfairworlds.listeners.mobs
 
-import com.gmail.danott6340.unfairworlds.UnfairWorlds
 import com.gmail.danott6340.unfairworlds.listeners.AbstractUnfairListener
 import com.gmail.danott6340.unfairworlds.listeners.Flag
 import org.bukkit.Location
@@ -17,18 +16,22 @@ import org.bukkit.inventory.PlayerInventory
 import org.bukkit.potion.PotionEffect
 import org.bukkit.potion.PotionEffectType
 import org.bukkit.projectiles.ProjectileSource
-import java.util.logging.Level
+import java.util.*
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.random.Random.Default.nextInt
 
-class DamageHandler : AbstractUnfairListener() {
-    companion object {
-        private val HUNGER: PotionEffect = PotionEffect(PotionEffectType.HUNGER, 1000, 3)
-        val instance: DamageHandler = DamageHandler()
-    }
+object DamageHandler : AbstractUnfairListener() {
+    private val HUNGER: PotionEffect = PotionEffect(PotionEffectType.HUNGER, 1000, 3)
 
+    override val allowedFlags: EnumSet<Flag> = EnumSet.of(Flag.HYDRA_SILVERFISH, Flag.BETTER_SPIDERS, Flag.IRON_GOLEM_SPACE_PROGRAM,
+        Flag.ANTI_SHIELD_PIGLINS, Flag.BUFFED_ZOMBIES, Flag.ARMOR_PIERCING_SKELETONS, Flag.DRAGON_DISARM, Flag.BLAZE_REMOVE_RESISTANCE,
+        Flag.PILLAGER_BACK)
 
+    /**
+     * Listener for projectiles that land on a player
+     * They don't always fire the regular damage event.
+     */
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
     fun onProjectile(e: ProjectileHitEvent) {
         val target = e.entity
@@ -46,29 +49,35 @@ class DamageHandler : AbstractUnfairListener() {
     }
 
 
+    /**
+     * Damage handler. Checks for any proxy (arrows, fireballs) before determining the source and branching off from there.
+     */
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     fun onDamage(e: EntityDamageByEntityEvent) {
-        val damager = e.damager;
+        val damager = e.damager
         var projectile: Projectile? = null
         val attacker:LivingEntity? = if (damager is LivingEntity) damager else {
-            var source: ProjectileSource? = null;
+            var source: ProjectileSource? = null
             if (damager is Projectile) {
-                source = damager.shooter;
+                source = damager.shooter
                 projectile = damager
             }
             else if (damager is AreaEffectCloud) {
-                source = damager.source;
+                source = damager.source
             }
-            if (source is LivingEntity) source else null;
+            if (source is LivingEntity) source else null
         }
 
         val target = e.entity
         if (attacker == null || target !is LivingEntity) return
 
-        if (attacker is Player) attackFromPlayer(e, attacker, target, projectile);
-        else attackFromMob(e, attacker, target, projectile);
+        if (attacker is Player) attackFromPlayer(e, attacker, target, projectile)
+        else attackFromMob(e, attacker, target, projectile)
     }
 
+    /**
+     * Root method that covers attacks made on players from mobs
+     */
     private fun attackFromMob(e: EntityDamageByEntityEvent, attacker: LivingEntity, target: LivingEntity, projectile: Projectile?) {
         when (val type = attacker.type) {
             EntityType.ZOMBIE, EntityType.ZOMBIE_VILLAGER, EntityType.HUSK, EntityType.DROWNED -> hungerZombies(
@@ -84,7 +93,7 @@ class DamageHandler : AbstractUnfairListener() {
             )
 
             EntityType.IRON_GOLEM -> golemThrow(attacker, target)
-            EntityType.ENDER_DRAGON -> dragonShatterArmor(attacker, target)
+            EntityType.ENDER_DRAGON -> dragonDisarms(attacker, target)
             EntityType.BLAZE -> blazeStripEnchantment(target)
             EntityType.RABBIT -> {
                 e.damage *= 2
@@ -98,18 +107,19 @@ class DamageHandler : AbstractUnfairListener() {
         }
     }
 
+    /**
+     * Root method that covers attacks done by players on mobs
+     */
     private fun attackFromPlayer(e: EntityDamageByEntityEvent, attacker: Player, target: LivingEntity, projectile: Projectile?) {
         when (val type = target.type) {
-            EntityType.SILVERFISH -> hydraSilverfish(e, attacker, target as Silverfish, projectile)
+            EntityType.SILVERFISH -> hydraSilverfish(attacker, target as Silverfish, projectile)
             else -> {}
         }
     }
 
 
-    private fun hydraSilverfish(e: EntityDamageByEntityEvent, attacker: Player, target: Silverfish, projectile: Projectile?) {
+    private fun hydraSilverfish(attacker: Player, target: Silverfish, projectile: Projectile?) {
         if (!hasFlag(attacker.world, Flag.HYDRA_SILVERFISH)) return
-        //TODO: All cases are broken FIRE and FIRE_TICKS never activate for this kind of event, and isVisualFire does not indicate fire arrows.
-        //TODO: Change to determine if source weapon has fire aspect (if melee), flame (if bow), or channelling (trident, but only in storm)
         val usedFire = when (projectile) {
             is Trident -> {
                 target.location.world.isThundering && projectile.itemStack.containsEnchantment(Enchantment.CHANNELING)
@@ -125,13 +135,17 @@ class DamageHandler : AbstractUnfairListener() {
             }
             else -> {
                 attacker.inventory.itemInMainHand.containsEnchantment(Enchantment.FIRE_ASPECT)
-            };
+            }
         }
-        if (!usedFire) HydraSilverfish.instance.primeForMultiplication(target)
+        if (!usedFire) HydraSilverfish.primeForMultiplication(target)
     }
 
+    /**
+     * Regular spiders now poison with their bites
+     * Cave spiders already could poison, and now they're even worse
+     */
     private fun poisonSpider(attacker: LivingEntity, target: LivingEntity) {
-        if (!hasFlag(target.world, Flag.SPOODER)) return
+        if (!hasFlag(target.world, Flag.BETTER_SPIDERS)) return
         val amplifier = when (attacker.type) {
             EntityType.SPIDER -> 1
             EntityType.CAVE_SPIDER -> 2
@@ -142,19 +156,23 @@ class DamageHandler : AbstractUnfairListener() {
         }
     }
 
+    /**
+     * NASA has nothing on iron golems
+     */
     private fun golemThrow(attacker: LivingEntity, target: LivingEntity) {
         if (!hasFlag(attacker.world, Flag.IRON_GOLEM_SPACE_PROGRAM)) return
-        val newDirection = target.velocity.setY(20);
+        val newDirection = target.velocity.setY(20)
         target.velocity = newDirection
     }
 
+    /**
+     * Piglins break player's shields
+     */
     private fun antiShieldPiglins(attacker: LivingEntity, target: LivingEntity) {
         if (!(hasFlag(target.world, Flag.ANTI_SHIELD_PIGLINS)
                     && target is Player
                     && target.isBlocking)
         ) return
-
-        UnfairWorlds.instance.logger.log(Level.INFO, "PIG RUN")
 
         val inventory: PlayerInventory = target.inventory
         var item = inventory.itemInMainHand
@@ -167,6 +185,11 @@ class DamageHandler : AbstractUnfairListener() {
         }
     }
 
+    /**
+     * All zombies add a severe hunger effect to the player if they're hit
+     * Drowned zombies also erase your air meter (and severely cut your water breathing duration if you have it)
+     * Husks leave your stomach entirely empty.
+     */
     private fun hungerZombies(type: EntityType, target: LivingEntity) {
         if (!hasFlag(target.world, Flag.BUFFED_ZOMBIES)) return
         target.addPotionEffect(HUNGER)
@@ -190,8 +213,12 @@ class DamageHandler : AbstractUnfairListener() {
         e.setDamage(EntityDamageEvent.DamageModifier.MAGIC, 0.0)
     }
 
-    private fun dragonShatterArmor(attacker: LivingEntity, target: LivingEntity) {
-        if (!hasFlag(target.world, Flag.DRAGON_SHATTER_ARMOR) || target !is Player) return
+    /**
+     * If the ender dragon hits the player, a random armor/hand item will be forcibly dropped from the player's equipment
+     * Don't worry, the dropped items are invulnerable.
+     */
+    private fun dragonDisarms(attacker: LivingEntity, target: LivingEntity) {
+        if (!hasFlag(target.world, Flag.DRAGON_DISARM) || target !is Player) return
         val inventory: PlayerInventory = target.inventory
 
         val slotsToPick: MutableList<EquipmentSlot> = ArrayList()
@@ -215,6 +242,10 @@ class DamageHandler : AbstractUnfairListener() {
         }
     }
 
+    /**
+     * Blaze's can remove fire protection enchantments as well
+     * Keep in mind that these (or fire resistance potions) are needed to survive in the nether.
+     */
     private fun blazeStripEnchantment(target: LivingEntity) {
         if (!(hasFlag(target.world, Flag.BLAZE_REMOVE_RESISTANCE)
                     && target is Player
@@ -232,6 +263,9 @@ class DamageHandler : AbstractUnfairListener() {
         }
     }
 
+    /**
+     * Blazes can reduce (or outright erase) fire resistance potion effects from the player.
+     */
     private fun blazePreProcess(player: Player) {
         if (!hasFlag(player.world, Flag.BLAZE_REMOVE_RESISTANCE)) return
         val effect = player.getPotionEffect(PotionEffectType.FIRE_RESISTANCE)
@@ -242,8 +276,11 @@ class DamageHandler : AbstractUnfairListener() {
         }
     }
 
+    /**
+     * Eliminates all forms of damage resistance if the attacker is attacking from behind the victim
+     */
     private fun noResistanceIfBehind(victim: Entity, attacker: Entity, e: EntityDamageByEntityEvent) {
-        if (hasFlag(attacker.world, Flag.PILLAGER_BACK) && isBehind(attacker.location, victim.location)) {
+        if (hasFlag(attacker.world, Flag.PILLAGER_BACK) && attacker.isBehind(victim)) {
             e.setDamage(EntityDamageEvent.DamageModifier.ARMOR, 0.0)
             e.setDamage(EntityDamageEvent.DamageModifier.MAGIC, 0.0)
         }
@@ -254,9 +291,12 @@ class DamageHandler : AbstractUnfairListener() {
         return if (send < 0) send + 360 else send
     }
 
-    private fun isBehind(attacker: Location, victim: Location, angleTolerance: Float = 30f): Boolean {
-        val a = normalizeYaw(attacker)
-        val v = normalizeYaw(victim)
+    private fun Location.isBehind(target: Location, angleTolerance: Float = 30f): Boolean {
+        val a = normalizeYaw(this)
+        val v = normalizeYaw(target)
         return abs(a - v) <= angleTolerance
     }
+
+    private inline fun Entity.isBehind(target: Entity, angleTolerance: Float = 30f) = this.location.isBehind(target.location, angleTolerance)
+
 }

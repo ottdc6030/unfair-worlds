@@ -9,129 +9,70 @@ import org.bukkit.event.Listener
 import java.util.*
 
 
+/**
+ * Abstract class for any event listeners related to affected worlds.
+ */
 abstract class AbstractUnfairListener : Listener {
-    companion object {
-        private val flagsByWorld = EnumMap<Environment, Set<Flag>>(Environment::class.java);
-        private val worldsByEnv = EnumMap<Environment, World>(Environment::class.java);
-        private val instances = mutableSetOf<AbstractUnfairListener>()
-        fun unregisterAll() {
-            for (listener in instances) listener.unregister()
-        }
-        fun registerAll(listeners: Collection<AbstractUnfairListener>) {
-            for (environment in Environment.entries) {
-                val set = Flag.entries.filter { it.belongsIn(environment) }.toSet()
-                if (set.isNotEmpty()) flagsByWorld[environment] = set;
-            }
-            for (listener in listeners) {
-                instances += listener;
-                listener.register()
-            }
-        }
-        fun addAll(w: World) {
-            val env = w.environment
-            val set = Flag.entries.filter { it.belongsIn(env) }.toSet()
-            flagsByWorld[env] = set
-        }
-        @JvmStatic
-        protected fun getWorlds(flag: Flag? = null): List<World> {
-            if (flag == null) return Bukkit.getWorlds();
-            val send: MutableList<World> = mutableListOf()
-            for ((key, set) in flagsByWorld) {
-                if (flag in set) send.add(getWorld(key))
-            }
-            return send
-        }
-        @JvmStatic
-        protected fun getWorld(env: Environment): World =
-            worldsByEnv.computeIfAbsent(env) {
-                when (it) {
-                    Environment.NORMAL -> Bukkit.getWorld("world")
-                    Environment.NETHER -> Bukkit.getWorld("world_nether")
-                    Environment.THE_END -> Bukkit.getWorld("world_the_end")
-                    else -> throw IllegalArgumentException("NO");
-                }!!
-            }
-        @JvmStatic
-        protected fun getSubset(vararg flags: Flag): Map<Flag, MutableList<World>> {
-            if (flags.isEmpty()) return mapOf()
-            val send = HashMap<Flag, MutableList<World>>();
+    private val registeredFlags = mutableSetOf<Flag>()
+    abstract val allowedFlags: EnumSet<Flag>
+    val isRegistered get() = registeredFlags.isNotEmpty()
 
-            for ((env, set) in flagsByWorld) {
-                for (flag in flags) {
-                    if (flag !in set) continue
-
-                    val list = send.computeIfAbsent(flag) { mutableListOf() }
-                    list.add(getWorld(env))
-                }
-            }
-
-            return send
+    /**
+     * Registers the listener to respond to events
+     * @param flag The flag representing the types of events to listen to
+     * @return true if the listener has been newly registered, false if another flag has previously registered this event
+     * (or the passed flag doesn't belong to this listener). Note that in the former case, false doesn't mean unsuccessful,
+     * just that there is no special behavior needed in response to the redundant registration.
+     */
+    open fun register(flag: Flag): Boolean {
+        if (flag !in allowedFlags || !registeredFlags.add(flag)) return false
+        return if (registeredFlags.size == 1) {
+            Bukkit.getPluginManager().registerEvents(this, UnfairWorlds.instance)
+            true
         }
+        else false
     }
 
-
-    private var registered: Boolean = false;
-    val isRegistered get() = registered;
-
-    open fun register(): Boolean {
-        if (registered) return false;
-        Bukkit.getPluginManager().registerEvents(this, UnfairWorlds.instance)
-        registered = true;
-        return true;
-    }
-
-    open fun unregister(): Boolean {
-        if (!registered) return false;
-        HandlerList.unregisterAll(this);
-        registered = false;
-        return true;
-    }
-
-    protected fun hasFlag(world: World, flag: Flag) = hasFlag(world.environment, flag)
-
-    protected fun hasFlag(environment: Environment, flag: Flag): Boolean  {
-        val set = flagsByWorld[environment] ?: return false
-        return flag in set
-    }
-
-    protected fun hasOrFlags(world: World, vararg flags: Flag) = hasOrFlags(world.environment, *flags);
-
-    protected fun hasOrFlags(environment: Environment, vararg flags: Flag): Boolean {
-        val set = flagsByWorld[environment] ?: return false
-
-        for (flag in flags) {
-            if (flag in set) return true
+    /**
+     * Unregisters the listener
+     * @param flag a flag used to previously register the listener
+     * @return true if the listener has been fully unregistered, false if another flag still has this listener registered
+     * (Or the passed flag didn't register this listener to begin with.)
+     */
+    open fun unregister(flag: Flag): Boolean {
+        return if (registeredFlags.remove(flag) && !isRegistered) {
+            HandlerList.unregisterAll(this)
+            true
         }
-        return false
+        else false
     }
 
-    protected fun hasAndFlags(world: World, vararg flags: Flag) = hasAndFlags(world.environment, *flags)
+    /**
+     * Initializing behavior that can only be done after the plugin is loaded
+     * Whether the listener will actually be registered is irrelevant.
+     * This is only setup that can't be done when the class is statically loaded
+     */
+    internal open fun onLoad() {
 
-    protected fun hasAndFlags(environment: Environment, vararg flags: Flag): Boolean {
-        val set = flagsByWorld[environment] ?: return false
-
-        for (flag in flags) {
-            if (flag !in set) return false
-        }
-        return true
     }
 
-    protected fun getFlags(world: World, vararg flags: Flag) = getFlags(world.environment, *flags)
+    /**
+     * @see [FlagManager.hasFlag]
+     */
+    protected fun hasFlag(environment: Environment, flag: Flag) = FlagManager.hasFlag(environment, flag)
 
-    protected fun getFlags(environment: Environment, vararg flags: Flag): List<Flag> {
-        val set = flagsByWorld[environment] ?: return listOf()
-        if (flags.isEmpty()) return java.util.List.copyOf(set);
+    /**
+     * @see [FlagManager.hasFlag]
+     */
+    protected fun hasFlag(world: World, flag: Flag) = FlagManager.hasFlag(world.environment, flag)
 
-        val send: MutableList<Flag> = ArrayList()
-        for (flag in flags) {
-            if (flag in set) send.add(flag)
-        }
-        return Collections.unmodifiableList(send)
-    }
+    /**
+     * @see [FlagManager.getFlags]
+     */
+    protected fun getFlags(environment: Environment, vararg flags: Flag) = FlagManager.getFlags(environment, *flags)
 
-
-
-
-
-
+    /**
+     * @see [FlagManager.getFlags]
+     */
+    protected fun getFlags(world: World, vararg flags: Flag) = FlagManager.getFlags(world.environment, *flags)
 }

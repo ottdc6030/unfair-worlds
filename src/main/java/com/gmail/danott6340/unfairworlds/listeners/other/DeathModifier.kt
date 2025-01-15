@@ -8,11 +8,21 @@ import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.entity.EntityResurrectEvent
 import org.bukkit.event.entity.PlayerDeathEvent
+import java.util.*
+import kotlin.collections.HashSet
 
-class DeathModifier private constructor() : AbstractUnfairListener() {
+/**
+ * Handles the death of players depending on configuration and location
+ */
+object DeathModifier: AbstractUnfairListener() {
     private val keepInvOnDeath = HashSet<Player>()
 
+    override val allowedFlags: EnumSet<Flag> = EnumSet.of(Flag.KEEP_EXP, Flag.KEEP_ITEMS, Flag.TOTEMS_PRESERVE_INVENTORY)
 
+    /**
+     * Players can keep their EXP on death.
+     * And potentially their inventory too (except curse of vanishing items).
+     */
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     fun onDeath(e: PlayerDeathEvent) {
         val p = e.player
@@ -29,6 +39,10 @@ class DeathModifier private constructor() : AbstractUnfairListener() {
         }
     }
 
+    /**
+     * Totem logic. Players who die holding it are marked to preserve their inventory instead of being saved from death.
+     * The exception is the End, where inventory is preserved for free.
+     */
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     fun onTotemSave(e: EntityResurrectEvent) {
         val entity = e.entity
@@ -38,9 +52,5 @@ class DeathModifier private constructor() : AbstractUnfairListener() {
             keepInvOnDeath.add(entity)
             e.isCancelled = true
         }
-    }
-
-    companion object {
-        val instance: DeathModifier = DeathModifier()
     }
 }
